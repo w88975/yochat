@@ -33,3 +33,6 @@ Wechat.config({
     openBrowser: false, // 是否在浏览器中打开二维码链接 (默认在terminal中显示)
 })
 ```
+效果演示:
+
+ ![image](https://raw.githubusercontent.com/w88975/node-wechat/master/docs/screenshot.gif)
