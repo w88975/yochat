@@ -8,5 +8,6 @@ Wechat.config({
 
 Wechat.run()
 WxListener.on('message', (val) => {
-    console.log(val.type, val.msg)
+    console.log(`消息类型: ${val.type}`)
+    console.log(`收到来自: ${val.fromUser.NickName} 的消息: ${val.msg}`)
 })

@@ -13,3 +13,5 @@ yarn-error.log*
 .vscode/
 .eslintrc/
 .vscode/
+
+*.cookie

@@ -237,7 +237,7 @@ module.exports = {
                     T_User = m_item;
                 }
             })
-            TYPE != 'Miss' ?
+            TYPE !== 'Miss' ?
                 wxEvent.emit('message', {
                     fromUser: F_User, // 发送者
                     toUser: T_User, // 接收者
