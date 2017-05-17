@@ -1,12 +1,3 @@
-# node-wechat
-
-node-wechat 是一个微信机器人的Node.js版本的实现,集成了Web版微信的所有接口,功能,简单的几行命令就可以定义一个微信小机器人,当然,你也可以基于该代码自己扩展丰富的功能.
-
-## 入门
-
-定义简单的机器人:
-
-```javascript
 const Wechat = require('../index')
 
 // 全局配置
@@ -36,16 +27,3 @@ Wechat.run(async () => {
     })
 })
 
-```
-
-全局配置: 
-
-```javascript
-Wechat.config({
-    cookie: true, // 是否保存cookie 以便自动登录
-    openBrowser: false, // 是否在浏览器中打开二维码链接 (默认在terminal中显示)
-})
-```
-效果演示:
-
- ![image](https://raw.githubusercontent.com/w88975/node-wechat/master/docs/screenshot.gif)

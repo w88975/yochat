@@ -9,6 +9,7 @@
   "author": "w88975",
   "license": "ISC",
   "devDependencies": {
+    "open": "0.0.5",
     "qrcode-terminal": "^0.11.0",
     "request": "^2.81.0",
     "xml2js": "^0.4.17"

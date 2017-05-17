@@ -1,13 +1,18 @@
-var request = require('request').defaults({ jar: true })
+const fs = require('fs')
+const EventEmitter = require('events')
+const request = require('request').defaults({ jar: true })
+const parseString = require('xml2js').parseString
+
+const qrcode = require('qrcode-terminal')
+const open = require('open')
+const MsgFilter = require('./libs/msgfilter')
 var config = require('./config.js')
-var parseString = require('xml2js').parseString
+
 const _LOGIN_URL = 'https://login.weixin.qq.com/jslogin?appid=wx782c26e4c19acffb&redirect_uri=https%3A%2F%2Fwx.qq.com%2Fcgi-bin%2Fmmwebwx-bin%2Fwebwxnewloginpage&fun=new&lang=en_US&_=' + new Date().getTime()
 const _QR_IMAGE_URL = 'https://login.weixin.qq.com/qrcode/'
 const REDIRECT_URL = 'https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?loginicon=true&uuid=$0&tip=0&_=' + new Date().getTime()
-const fs = require('fs')
-const EventEmitter = require('events');
 
-var jar = request.jar();
+var jar = request.jar()
 
 var window = {
     QRLogin: {
@@ -37,8 +42,8 @@ var wxEvent = new EventEmitter()
 // cookie容器
 var JCookie = {};
 // 是否自动保存cookie 方便下次登录
-var saveCookie = false;
-var openBrowser = true;
+var saveCookie = true;
+var openBrowser = false;
 
 module.exports = {
     // 获取登录二维码
@@ -101,7 +106,7 @@ module.exports = {
     },
 
     // 等待登录
-    check_login: async function (uuid) {
+    async check_login(uuid) {
         var UUID = uuid;
         if (saveCookie) {
             let _check_cookie = await (this.check_cookie(true))
@@ -157,6 +162,9 @@ module.exports = {
 
     // 获取用户信息
     getUserInfo: async () => {
+        if (config.userInfo && config.SyncKey) {
+            return config.userInfo
+        }
         let data = await (fetch('https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxinit?r=' + new Date().getTime(), {
             method: 'post',
             json: true,
@@ -180,9 +188,12 @@ module.exports = {
 
     // 获取联系人列表
     getContact: async () => {
+        if (config.MemberList) {
+            return config.MemberList
+        }
         let data = await (fetch(`https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxgetcontact?r=${new Date().getTime()}&pass_ticket=${config.pass_ticket}&seq=0&skey=${config.skey}`, { json: true, followRedirect: false, jar: jar }))
         config.MemberList = data.body.MemberList
-        return data.body;
+        return config.MemberList;
     },
 
     // 拉取最新消息
@@ -206,45 +217,9 @@ module.exports = {
         config.SyncKey = data.body.SyncKey;
         // switch()
         data.body.AddMsgList.map(item => {
-            var TYPE = 'Miss';
-            switch (item.MsgType) {
-                case 1:
-                    TYPE = 'Text'
-                    break;
-                case 3:
-                    TYPE = 'Picture'
-                    break;
-                case 47:
-                    TYPE = 'Picture'
-                    break;
-                case 42:
-                    TYPE = 'NameCard'
-                    break;
-                case 49:
-                    TYPE = 'Link'
-                    break;
-                case 62:
-                    TYPE = 'Video'
-                    break;
-            }
-            var F_User = null;
-            var T_User = null;
-            config.MemberList.map(m_item => {
-                if (m_item.UserName === item.FromUserName) {
-                    F_User = m_item;
-                }
-                if (m_item.UserName === item.ToUserName) {
-                    T_User = m_item;
-                }
-            })
-            TYPE !== 'Miss' ?
-                wxEvent.emit('message', {
-                    fromUser: F_User, // 发送者
-                    toUser: T_User, // 接收者
-                    type: TYPE, // 消息类型
-                    msg: item.Content, // 消息内容
-                    originMsg: item // 原始消息内容
-                }) : 0
+            var filter = MsgFilter(item, config)
+            filter.type !== 'Miss' ?
+                wxEvent.emit('message', filter) : 0
         })
 
         return {
@@ -277,7 +252,7 @@ module.exports = {
     },
 
     // 消息进程
-    MsgServer: async function () {
+    async MsgServer() {
         while (true) {
             let newMsg = await (this.syncCheck())
             if (newMsg) {
@@ -320,9 +295,26 @@ module.exports = {
         return (data.body.BaseResponse.Ret === 0)
     },
 
-    global: (options) => {
+    config: (options) => {
         saveCookie = options.cookie || false
         openBrowser = options.openBrowser || false
+    },
+
+    async run(cb) {
+        let loginInfo = await (this.login())
+        if (!(await (this.check_cookie()))) {
+            var url = `https://login.weixin.qq.com/l/${loginInfo.uuid}`
+            console.log('获取登录二维码:', `https://login.weixin.qq.com/qrcode/${loginInfo.uuid}`)
+            openBrowser ? open(`https://login.weixin.qq.com/qrcode/${loginInfo.uuid}`) : qrcode.generate(url)
+        } else {
+            console.log('使用cookie自动登录!')
+        }
+        await this.check_login(loginInfo.uuid)
+        await this.getUserInfo()
+        await this.getContact()
+        console.log('登录成功,启动消息服务')
+        this.MsgServer() // 监听消息
+        cb && cb()
     },
 
     getConfig: () => {
