@@ -67,7 +67,7 @@ Wechat.run(async () => {
 
 ```javascript
 Wechat.config({
-    cookie: true, // 是否保存cookie 以便自动登录
+    autoLogin: true, // 是否保存cookie 以便自动登录
     openBrowser: false, // 是否在浏览器中打开二维码链接 (默认在terminal中显示)
 })
 ```

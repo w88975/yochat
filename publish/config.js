@@ -1,5 +1,3 @@
-'use strict';
-
 module.exports = {
     skey: '',
     pass_ticket: '',
@@ -12,4 +10,6 @@ module.exports = {
     userAvatar: '', // 头像
     userInfo: null, // 用户信息
     MemberList: [], // 联系人列表
-    SyncKey: [] };
+    SyncKey: [], // 同步key
+    chatRoomList: [] // 群聊
+};
