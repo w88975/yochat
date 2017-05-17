@@ -11,4 +11,5 @@ module.exports = {
     userInfo: null, // 用户信息
     MemberList: [], // 联系人列表
     SyncKey: [], // 同步key
+    chatRoomList: [] // 群聊
 };

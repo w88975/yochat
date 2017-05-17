@@ -5,7 +5,6 @@ const parseString = require('xml2js').parseString
 
 const qrcode = require('qrcode-terminal')
 const open = require('open')
-const MsgFilter = require('./libs/msgfilter')
 var config = require('./config.js')
 
 const _LOGIN_URL = 'https://login.weixin.qq.com/jslogin?appid=wx782c26e4c19acffb&redirect_uri=https%3A%2F%2Fwx.qq.com%2Fcgi-bin%2Fmmwebwx-bin%2Fwebwxnewloginpage&fun=new&lang=en_US&_=' + new Date().getTime()
@@ -26,7 +25,7 @@ var window = {
 var fetch = function (url, options) {
     return new Promise(function (resolve, reject) {
         request(url, options, (err, httpResponse, body) => {
-            if (saveCookie) {
+            if (autoLogin) {
                 var cookie_string = jar.getCookieString(url);
                 if (cookie_string.length > 0) {
                     fs.writeFileSync('./cookie/cookies.cookie', cookie_string)
@@ -42,29 +41,100 @@ var wxEvent = new EventEmitter()
 // cookie容器
 var JCookie = {};
 // 是否自动保存cookie 方便下次登录
-var saveCookie = true;
+var autoLogin = true;
 var openBrowser = false;
 
-module.exports = {
-    // 获取登录二维码
+// 消息过滤器
+const MsgFilter = async (item, config) => {
+    var TYPE = 'Miss';
+    switch (item.MsgType) {
+        case 1:
+            TYPE = 'Text'
+            break;
+        case 3:
+            TYPE = 'Picture'
+            break;
+        case 47:
+            TYPE = 'Picture'
+            break;
+        case 42:
+            TYPE = 'NameCard'
+            break;
+        case 49:
+            TYPE = 'Link'
+            break;
+        case 62:
+            TYPE = 'Video'
+            break;
+    }
+    var F_User = null;
+    var T_User = null;
+    var CONTENT = '';
+    // 群聊消息
+    if (item.FromUserName.indexOf('@@') === 0 || item.ToUserName.indexOf('@@') === 0) {
+        TYPE = 'Group'
+        var groupInfo = await (WechatCore.getGroupInfo(item.FromUserName.indexOf('@@') === 0 ? item.FromUserName : item.ToUserName))
+        F_User = groupInfo
+        groupInfo.MemberList.map(f_item => {
+            if (f_item.UserName === (item.ToUserName.indexOf('@@') === 0 ? item.FromUserName : item.ToUserName)) {
+                T_User = f_item;
+            }
+        })
+        CONTENT = item.Content;
+        if (item.Content.indexOf(':<br/>') > -1) {
+            CONTENT = item.Content.substring(item.Content.indexOf(':<br/>') + 6);
+        }
+        
+    } else {
+        config.MemberList.map(m_item => {
+            if (m_item.UserName === item.FromUserName) {
+                F_User = m_item;
+            }
+            if (m_item.UserName === item.ToUserName) {
+                T_User = m_item;
+            }
+        })
+        CONTENT = item.Content;
+    }
+
+    return {
+        fromUser: F_User, // 发送者
+        toUser: T_User, // 接收者
+        type: TYPE, // 消息类型
+        msg: CONTENT, // 消息内容
+        originMsg: item // 原始消息内容
+    }
+}
+
+module.exports = WechatCore = {
+    /**
+    *
+    获取登录二维码
+    *
+    @method login
+    *
+    @return {Object}
+    */
     login: async () => {
         let QRLoginUUID = await fetch(_LOGIN_URL)
         eval(QRLoginUUID.body)
-        wxEvent.emit('login', {
-            type: 'qrcode', msg: 'get uuid', data: {
-                code: window.QRLogin.code,
-                uuid: window.QRLogin.uuid
-            }
-        })
         return {
             code: window.QRLogin.code,
             uuid: window.QRLogin.uuid
         }
     },
 
-    // 检查cookie是否有效
-
-    check_cookie: async (getData) => {
+    /**
+    *
+    检查cookie状态, true 为有效
+    *
+    @method checkCookie
+    *
+    @param {Boolean} [getData=false] 是否获取cookie对象
+    *
+    @return {Boolean}
+    */
+    async __checkCookie(getData) {
         if (!fs.existsSync('./cookie/cookies.cookie')) {
             if (getData) {
                 return {}
@@ -72,16 +142,7 @@ module.exports = {
             return false
         }
         var cookie_string = fs.readFileSync('./cookie/cookies.cookie', 'utf-8')
-        var cookies = cookie_string.trim().split(';');
-        JCookie = {};
-        cookies.map(item => {
-            var trimitem = item.trim()
-            JCookie[trimitem.substring(0, trimitem.indexOf('='))] = trimitem.substring(trimitem.indexOf('=') + 1);
-        })
-        for (var i = 0; i < cookies.length; ++i) {
-            jar.setCookie(cookies[i].trim(), 'https://wx.qq.com');
-            jar.setCookie(cookies[i].trim(), 'https://webpush.wx.qq.com');
-        }
+        this.setCookie(cookie_string)
 
         let data = await fetch('https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxinit?r=-' + new Date().getTime(), {
             method: 'post',
@@ -108,17 +169,14 @@ module.exports = {
     // 等待登录
     async check_login(uuid) {
         var UUID = uuid;
-        if (saveCookie) {
-            let _check_cookie = await (this.check_cookie(true))
-            if (_check_cookie.hasOwnProperty('SystemTime') && _check_cookie.SystemTime !== 0) {
-                wxEvent.emit('login', {
-                    type: 'haslogin', msg: 'has logged in', data: config
-                })
+        if (autoLogin) {
+            let _checkCookie = await (this.__checkCookie(true))
+            if (_checkCookie.hasOwnProperty('SystemTime') && _checkCookie.SystemTime !== 0) {
                 config.uuid = UUID;
-                config.skey = _check_cookie.SKey;
+                config.skey = _checkCookie.SKey;
                 config.pass_ticket = '';
                 config.wxsid = JCookie['wxsid'];
-                config.wxuin = _check_cookie['User']['Uin'];
+                config.wxuin = _checkCookie['User']['Uin'];
                 return config;
             }
         }
@@ -160,8 +218,15 @@ module.exports = {
         }
     },
 
-    // 获取用户信息
-    getUserInfo: async () => {
+    /**
+    *
+    获取账户资料
+    *
+    @method getOwnerInfo
+    *
+    @return {config.userInfo}
+    */
+    getOwnerInfo: async () => {
         if (config.userInfo && config.SyncKey) {
             return config.userInfo
         }
@@ -186,14 +251,113 @@ module.exports = {
         return data.body;
     },
 
+    /**
+    *
+    获取单个用户信息
+    *
+    @method getUserInfo
+    *
+    @param {String} [userName=''] 用户UserName
+    *
+    @return {Object}
+    */
+    async getUserInfo(userName) {
+        var userObj = null;
+        if (userName.indexOf('@@') > -1) {
+            config.chatRoomList.map(item => {
+                if (item.UserName === userName) {
+                    userObj = item;
+                }
+            })
+            if (userObj) {
+                return userObj
+            }
+        }
+        let contacts = await this.getContact()
+
+        contacts.map(item => {
+            if (item.UserName === userName) {
+                userObj = item
+            }
+        })
+        return userObj;
+    },
+
+    /**
+    *
+    获取用户昵称
+    *
+    @method getNickName
+    *
+    @param {String} [userName=''] 用户UserName
+    *
+    @return {String}
+    */
+    async getNickName(userName) {
+        return await this.getUserInfo(userName).NickName
+    },
+
     // 获取联系人列表
-    getContact: async () => {
-        if (config.MemberList) {
+    async getContact() {
+        if (config.MemberList.length > 0) {
             return config.MemberList
         }
         let data = await (fetch(`https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxgetcontact?r=${new Date().getTime()}&pass_ticket=${config.pass_ticket}&seq=0&skey=${config.skey}`, { json: true, followRedirect: false, jar: jar }))
         config.MemberList = data.body.MemberList
+        var chatRooms = []
+        config.MemberList.map(item => {
+            if (item.UserName.indexOf('@@') > -1) {
+                chatRooms.push({
+                    ChatRoomId: '',
+                    UserName: item.UserName
+                })
+            }
+        })
+        await this.getGroupInfo(chatRooms)
         return config.MemberList;
+    },
+
+    // 获取群聊信息
+    async getGroupInfo(userName) {
+        var GroupInfo = await this.getUserInfo(userName);
+        if (GroupInfo) {
+            return GroupInfo
+        }
+        let data = await fetch('https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxbatchgetcontact?lang=zh_CNtype=ex&r=' + new Date().getTime(), {
+            method: 'post',
+            json: true,
+            followRedirect: false,
+            jar: jar,
+            body: {
+                "BaseRequest": {
+                    "Uin": config.wxuin,
+                    "Sid": config.wxsid,
+                    "Skey": config.skey,
+                    "DeviceID": config.DeviceID ? config.DeviceID : config.DeviceID = "e" + new Date().getTime()
+                },
+                Count: 1,
+                List: (userName instanceof Array) ? userName : [
+                    {
+                        ChatRoomId: '',
+                        UserName: userName
+                    }
+                ]
+            }
+        })
+        if (data.body.Count > 0) {
+            data.body.ContactList.map(item => {
+                var flag = false;
+                config.chatRoomList.map(j => {
+                    if (j.UserName === item.UserName) {
+                        flag = true;
+                    }
+                })
+                if (!flag) {
+                    config.chatRoomList.push(item)
+                }
+            })
+        }
+        return ((userName instanceof Array) ? data.body.ContactList : data.body.ContactList[0])
     },
 
     // 拉取最新消息
@@ -215,9 +379,9 @@ module.exports = {
             }
         }))
         config.SyncKey = data.body.SyncKey;
-        // switch()
-        data.body.AddMsgList.map(item => {
-            var filter = MsgFilter(item, config)
+
+        data.body.AddMsgList.map(async item => {
+            var filter = await MsgFilter(item, config)
             filter.type !== 'Miss' ?
                 wxEvent.emit('message', filter) : 0
         })
@@ -261,6 +425,39 @@ module.exports = {
         }
     },
 
+    /**
+    *
+    获取cookie字符串
+    *
+    @method getCookie
+    *
+    @return {String} 返回cookie的String字符串
+    */
+    getCookie() {
+        return jar.getCookieString('https://wx.qq.com');
+    },
+
+    /**
+    *
+    手动设置cookie
+    *
+    @method setCookie
+    *
+    @param {String} [cookieString=''] Cookie字符串
+    */
+    setCookie(cookieString) {
+        var cookies = cookieString.trim().split(';');
+        JCookie = {};
+        cookies.map(item => {
+            var trimitem = item.trim()
+            JCookie[trimitem.substring(0, trimitem.indexOf('='))] = trimitem.substring(trimitem.indexOf('=') + 1);
+        })
+        for (var i = 0; i < cookies.length; ++i) {
+            jar.setCookie(cookies[i].trim(), 'https://wx.qq.com');
+            jar.setCookie(cookies[i].trim(), 'https://webpush.wx.qq.com');
+        }
+    },
+
     // ### 发送消息
     // Type: 消息类型
     // LocalID: 
@@ -295,14 +492,150 @@ module.exports = {
         return (data.body.BaseResponse.Ret === 0)
     },
 
-    config: (options) => {
-        saveCookie = options.cookie || false
+    /**
+    *
+    全局配置
+    *
+    @method config
+    *
+    @param {Object} [options={}] 配置
+    */
+    config(options) {
+        autoLogin = options.autoLogin || true
         openBrowser = options.openBrowser || false
+        options.cookie ? this.setCookie(options.cookie) : 0
+    },
+
+    /**
+    *
+    创建群聊
+    *
+    @method createChatroom
+    *
+    @param {Array} [memberList=[], Topic=''] 用户列表 群聊名称
+    *
+    @return {Object}
+    */
+    async createChatroom(memberList, Topic) {
+        let data = await (fetch(`https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxcreatechatroom?pass_ticket=${config.pass_ticket}&r=${new Date().getTime()}`, {
+            method: 'post',
+            json: true,
+            followRedirect: false,
+            jar: jar,
+            body: {
+                "BaseRequest": {
+                    "Uin": parseInt(config.wxuin),
+                    "Sid": config.wxsid,
+                    "Skey": config.skey,
+                    "DeviceID": config.DeviceID ? config.DeviceID : config.DeviceID = "e" + new Date().getTime()
+                },
+                MemberCount: memberList.length,
+                MemberList: memberList,
+                Topic: Topic || '',
+            }
+        }))
+        return {
+            status: (data.body.MemberCount > 0),
+            error: data.body.BaseResponse.ErrMsg
+        }
+    },
+
+    /**
+    *
+    修改群聊名称
+    *
+    @method renameChatroom
+    *
+    @param {String} [ChatRoomName='',NewTopic='']
+    *
+    @return {Boolean}
+    */
+    async renameChatroom(ChatRoomName, NewTopic) {
+        var url = 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxupdatechatroom?fun=modtopic'
+        let data = await (fetch(url, {
+            method: 'post',
+            json: true,
+            followRedirect: false,
+            jar: jar,
+            body: {
+                "BaseRequest": {
+                    "Uin": parseInt(config.wxuin),
+                    "Sid": config.wxsid,
+                    "Skey": config.skey,
+                    "DeviceID": config.DeviceID ? config.DeviceID : config.DeviceID = "e" + new Date().getTime()
+                },
+                ChatRoomName,
+                NewTopic
+            }
+        }))
+        return (data.body.BaseResponse.ErrMsg === '' && data.body.BaseResponse.Ret === 0)
+    },
+
+    /**
+    *
+    邀请加入群聊
+    *
+    @method addMemberFromChatroom
+    *
+    @param {String} [ChatRoomName='',NewTopic='']
+    *
+    @return {Boolean}
+    */
+    async addMemberFromChatroom(ChatRoomName, userName) {
+        var url = 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxupdatechatroom?fun=addmember'
+        let data = await (fetch(url, {
+            method: 'post',
+            json: true,
+            followRedirect: false,
+            jar: jar,
+            body: {
+                "BaseRequest": {
+                    "Uin": parseInt(config.wxuin),
+                    "Sid": config.wxsid,
+                    "Skey": config.skey,
+                    "DeviceID": config.DeviceID ? config.DeviceID : config.DeviceID = "e" + new Date().getTime()
+                },
+                ChatRoomName,
+                AddMemberList: userName
+            }
+        }))
+        return (data.body.BaseResponse.ErrMsg === '' && data.body.BaseResponse.Ret === 0)
+    },
+
+    /**
+    *
+    移出群聊
+    *
+    @method deleteMemberFromChatroom
+    *
+    @param {String} [ChatRoomName='',NewTopic='']
+    *
+    @return {Boolean}
+    */
+    async deleteMemberFromChatroom(ChatRoomName, userName) {
+        var url = 'https://wx.qq.com/cgi-bin/mmwebwx-bin/webwxupdatechatroom?fun=delmember'
+        let data = await (fetch(url, {
+            method: 'post',
+            json: true,
+            followRedirect: false,
+            jar: jar,
+            body: {
+                "BaseRequest": {
+                    "Uin": parseInt(config.wxuin),
+                    "Sid": config.wxsid,
+                    "Skey": config.skey,
+                    "DeviceID": config.DeviceID ? config.DeviceID : config.DeviceID = "e" + new Date().getTime()
+                },
+                ChatRoomName,
+                DelMemberList: userName
+            }
+        }))
+        return (data.body.BaseResponse.ErrMsg === '' && data.body.BaseResponse.Ret === 0)
     },
 
     async run(cb) {
         let loginInfo = await (this.login())
-        if (!(await (this.check_cookie()))) {
+        if (!(await (this.__checkCookie()))) {
             var url = `https://login.weixin.qq.com/l/${loginInfo.uuid}`
             console.log('获取登录二维码:', `https://login.weixin.qq.com/qrcode/${loginInfo.uuid}`)
             openBrowser ? open(`https://login.weixin.qq.com/qrcode/${loginInfo.uuid}`) : qrcode.generate(url)
@@ -310,7 +643,7 @@ module.exports = {
             console.log('使用cookie自动登录!')
         }
         await this.check_login(loginInfo.uuid)
-        await this.getUserInfo()
+        await this.getOwnerInfo()
         await this.getContact()
         console.log('登录成功,启动消息服务')
         this.MsgServer() // 监听消息
