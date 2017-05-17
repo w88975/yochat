@@ -1,6 +1,6 @@
 {
   "name": "yochat",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "基于 Nodejs 的 微信机器人、微信命令行工具. 扩展性高的微信机器人",
   "main": "./publish/index.js",
   "scripts": {
