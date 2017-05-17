@@ -2,12 +2,19 @@
   "name": "node-wechat",
   "version": "1.0.0",
   "description": "基于 Nodejs 的 微信机器人、微信命令行工具. 扩展性高的微信机器人",
-  "main": "src/index.js",
+  "main": "./index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+   "keywords": [
+    "node-wechat",
+    "wechat",
+    "itchat",
+    "wechat-sdk",
+    "wechat-bot"
+  ],
   "author": "w88975",
-  "license": "ISC",
+  "license": "MIT",
   "devDependencies": {
     "open": "0.0.5",
     "qrcode-terminal": "^0.11.0",
