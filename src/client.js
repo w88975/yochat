@@ -28,6 +28,8 @@ var fetch = function (url, options) {
             if (autoLogin) {
                 var cookie_string = jar.getCookieString(url);
                 if (cookie_string.length > 0) {
+                    jar.setCookie('DeviceID=' + config.DeviceID, 'https://wx.qq.com');
+                    jar.setCookie('DeviceID=' + config.DeviceID, 'https://webpush.wx.qq.com');
                     fs.writeFileSync('./cookie/cookies.cookie', cookie_string)
                 }
             }
@@ -84,7 +86,7 @@ const MsgFilter = async (item, config) => {
         if (item.Content.indexOf(':<br/>') > -1) {
             CONTENT = item.Content.substring(item.Content.indexOf(':<br/>') + 6);
         }
-        
+
     } else {
         config.MemberList.map(m_item => {
             if (m_item.UserName === item.FromUserName) {
@@ -411,6 +413,7 @@ module.exports = WechatCore = {
                 return str;
             })();
         var data = await fetch(url, { json: true, followRedirect: false, jar: jar })
+        // 有时候会乱码
         eval(data.body)
         return (window.synccheck.retcode === '0' && window.synccheck.selector != '0')
     },
@@ -456,6 +459,7 @@ module.exports = WechatCore = {
             jar.setCookie(cookies[i].trim(), 'https://wx.qq.com');
             jar.setCookie(cookies[i].trim(), 'https://webpush.wx.qq.com');
         }
+        console.log(config.DeviceID)
     },
 
     // ### 发送消息

@@ -37,6 +37,15 @@ Wechat.run(async () => {
         } 
         // 普通消息
         else {
+            if (data.msg === '帮助') {
+                Wechat.sendMsg(ownUserName, data.fromUser.UserName, 
+`命令:
+1.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+2.xxxxxxxxxxxxxxxxxxxxxxxx
+3.xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+4.xxxxxxxxxxxxxxxxxxxxxxxxxxx
+5.更多`)
+            }
             console.log(`收到来自: ${data.fromUser.NickName} 的消息: ${data.msg}`)
         }
 
