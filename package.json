@@ -1,12 +1,13 @@
 {
-  "name": "node-wechat",
-  "version": "1.0.0",
+  "name": "yochat",
+  "version": "1.0.1",
   "description": "基于 Nodejs 的 微信机器人、微信命令行工具. 扩展性高的微信机器人",
   "main": "./index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-   "keywords": [
+  "keywords": [
+    "yochat",
     "node-wechat",
     "wechat",
     "itchat",
@@ -15,7 +16,7 @@
   ],
   "author": "w88975",
   "license": "MIT",
-  "devDependencies": {
+  "dependencies": {
     "open": "0.0.5",
     "qrcode-terminal": "^0.11.0",
     "request": "^2.81.0",

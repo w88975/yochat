@@ -1,4 +1,4 @@
-const Wechat = require('../index')
+const Wechat = require('yochat')
 
 // 全局配置
 Wechat.config({

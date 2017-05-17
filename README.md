@@ -7,7 +7,7 @@ node-wechat 是一个微信机器人的Node.js版本的实现,集成了Web版微
 定义简单的机器人:
 
 ```javascript
-const Wechat = require('../index')
+const Wechat = require('yochat')
 
 // 全局配置
 Wechat.config({
