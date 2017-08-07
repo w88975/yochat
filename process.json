@@ -1,0 +1,13 @@
+{
+    "apps": [
+        {
+            "name": "yochat",
+            "script": "test.js",
+            "watch": true,
+            "log_date_format": "YYYY - MM - DD HH: mm Z",
+            "ignore_watch": [
+                "*.cookie"
+            ]
+        }
+    ]
+}

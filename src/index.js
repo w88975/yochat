@@ -1,2 +1,2 @@
 require('babel-polyfill')
-module.exports = require('./client');
+module.exports = require('./core');
